@@ -2,10 +2,16 @@
 #include "rclcpp/node.hpp"
 #include "sensor_msgs/msg/detail/laser_scan__struct.hpp"
 #include <attach_shelf/srv/go_to_loading.hpp>
+#include <cmath>
 #include <cstddef>
+#include <math.h>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>
 #include <geometry_msgs/msg/twist.hpp>
+#include <utility>
+#include <vector>
+#include <algorithm>
+#include <tf2_ros/transform_broadcaster.h>
 
 class Approach_Server : public rclcpp::Node{
     
@@ -19,24 +25,91 @@ class Approach_Server : public rclcpp::Node{
         }
     private:
         rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr sub_scan;
-        sensor_msgs::msg::LaserScan::SharedPtr scan_msg;
         rclcpp::Service<attach_shelf::srv::GoToLoading>::SharedPtr srv_;
+        tf2_ros::TransformBroadcaster broadcaster_{this};
+        float x1, x2, y1, y2;
+        std::vector<int> accept_idx;
 
         void scan_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg){
-            scan_msg = msg;
-            RCLCPP_INFO(this->get_logger(), "Intensity size:%zu" ,msg->intensities.size());
+            
+            // RCLCPP_INFO(this->get_logger(), "Intensity size:%zu" ,msg->intensities.size());
+            // for(size_t i=0; i<msg->intensities.size();i++)
+            // if(msg->intensities[i]>= 8000)
+            // RCLCPP_INFO(this->get_logger(), "Scan intensity:%zu, %f",i, msg->intensities[i]);
 
-            for(size_t i=0; i<msg->intensities.size();i++)
-            if(msg->intensities[i]>= 8000)
-            RCLCPP_INFO(this->get_logger(), "Scan intensity:%zu, %f",i, msg->intensities[i]);
+            int minimum_idx_difference = 30;
+            std::vector<std::pair<float, int>> intensity_cont;
+
+            for(size_t i=0; i<msg->intensities.size();i++) 
+            intensity_cont.emplace_back(msg->intensities[i],i);
+
+            std::sort(intensity_cont.begin(), intensity_cont.end(),
+                  [](const std::pair<float, int>& a, const std::pair<float, int>& b)-> 
+                  bool {
+                    return a.first > b.first;
+                  });
+
+            for(const auto & pair : intensity_cont){
+
+                bool close = false;
+                for(const int acp : accept_idx){
+                    if(std::abs(acp - pair.second) < minimum_idx_difference){
+                        close = true;
+                        break;
+                    }
+                }
+
+                if(!close) accept_idx.push_back(pair.second);
+                if(accept_idx.size() == 2) break;
+            }
+            int idx_1 = accept_idx[0];
+            int idx_2 = accept_idx[1];
+            
+            float angle1 = msg->angle_min + idx_1*msg->angle_increment;
+            float angle2 = msg->angle_min + idx_2*msg->angle_increment;
+
+            x1 = msg->ranges[idx_1]* cos(angle1);
+            y1 = msg->ranges[idx_1]* sin(angle1);
+
+            x2 = msg->ranges[idx_2]* cos(angle2);
+            y2 = msg->ranges[idx_2]* sin(angle2);
+
+            // RCLCPP_INFO(this->get_logger(), "Intensity Index 1:%i",idx_1);
+            // RCLCPP_INFO(this->get_logger(), "Intensity Index 2:%i",idx_2);
 
         }
 
+
         void attach_callback(const std::shared_ptr<attach_shelf::srv::GoToLoading::Request> req, 
         const std::shared_ptr<attach_shelf::srv::GoToLoading::Response> res){
-            if(req->attach_to_shelf == true){
+            if(req->attach_to_shelf == true && accept_idx.size() == 2){
+                broadcaster_.sendTransform(broadcast_transform( (x1+x2)/2 , (y1+y2)/2 ));
+                RCLCPP_INFO(this->get_logger(), "Approach call");
+
+                res->complete = true;
+            }else if(req->attach_to_shelf == false && accept_idx.size() == 2){
+                broadcaster_.sendTransform(broadcast_transform( (x1+x2)/2 , (y1+y2)/2 ));
+                res->complete = false;
+            }else {
                 
             }
+        }
+
+        geometry_msgs::msg::TransformStamped broadcast_transform(float x,float y){
+                
+                geometry_msgs::msg::TransformStamped t;
+                t.header.stamp = this->now();
+                t.header.frame_id = "robot_front_laser_base_link";
+                t.child_frame_id = "cart_frame";
+                t.transform.translation.x = x;
+                t.transform.translation.y = y;
+                t.transform.translation.z = 0.0;  // Assuming it's 2D plane
+                t.transform.rotation.x = 0.0;
+                t.transform.rotation.y = 0.0;
+                t.transform.rotation.z = 0.0;
+                t.transform.rotation.w = 1.0;
+
+                return t;
         }
 
 };
