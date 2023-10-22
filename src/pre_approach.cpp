@@ -19,7 +19,7 @@
 class Attach_self : public rclcpp::Node{
 
     public:
-        Attach_self(int &argc, char **argv): Node("attach_self"){
+        Attach_self(): Node("attach_self"){
             
 
             this->declare_parameter("obstacle", 0.0);
@@ -43,28 +43,35 @@ class Attach_self : public rclcpp::Node{
         geometry_msgs::msg::Twist vel;
         rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr sub_scan;
         rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_odom;
-        bool turn;
-
+        bool turn;  
         rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_;
 
         void scan_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg){
             RCLCPP_INFO(this->get_logger(), "obstacle: %f", obstacle);
             RCLCPP_INFO(this->get_logger(), "degrees: %i", degrees );
-            if(msg->ranges[359] > obstacle){
-                vel.linear.x = 0.2;
+            if(msg->ranges[359] > obstacle && !turn ){
+                vel.linear.x = 0.5;
+                pub_->publish(vel);
             }else if (msg->ranges[359] < obstacle){
                 vel.linear.x = 0;
                 turn = true;
+                pub_->publish(vel);
             }
+
+            RCLCPP_INFO(this->get_logger(), "vel.linear: %f", vel.linear.x);
+
         }
 
-        void odom_callback(const nav_msgs::msg::Odometry msg){
-            float cur_degree = euler_degree_transform(msg)/M_PI*360;
+        void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg){
+            float cur_degree = euler_degree_transform(msg)/M_PI*180;
             RCLCPP_INFO(this->get_logger(), "cur_degrees: %f", cur_degree );
-            if (degrees - cur_degree > 1 && turn ) {
-                vel.angular.z = (degrees - cur_degree)*M_PI/360*0.5 ;
+            if (std::fabs(degrees - cur_degree) > 0.1 && turn ) {
+                vel.angular.z = (degrees - cur_degree)/std::fabs(degrees - cur_degree)*0.4;
+                RCLCPP_INFO(this->get_logger(), "vel.angular: %f", vel.angular.z);
+                pub_->publish(vel);
             }else{
                 vel.angular.z = 0;
+                pub_->publish(vel);
             }
         }
 
@@ -73,11 +80,11 @@ class Attach_self : public rclcpp::Node{
             degrees = this->get_parameter("degrees").as_int();
         }
 
-        float euler_degree_transform(const nav_msgs::msg::Odometry t_st){
-                float x = t_st.pose.pose.orientation.x;
-                float y = t_st.pose.pose.orientation.y;
-                float z = t_st.pose.pose.orientation.z;
-                float w = t_st.pose.pose.orientation.w; 
+        float euler_degree_transform(const nav_msgs::msg::Odometry::SharedPtr msg){
+                float x = msg->pose.pose.orientation.x;
+                float y = msg->pose.pose.orientation.y;
+                float z = msg->pose.pose.orientation.z;
+                float w = msg->pose.pose.orientation.w; 
 
             return atan2(2 * (w * z + x * y),1 - 2 * (y * y + z * z));
         }
@@ -86,7 +93,7 @@ class Attach_self : public rclcpp::Node{
 
 int main(int argc, char *argv[]){
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<Attach_self>(argc, argv));
+    rclcpp::spin(std::make_shared<Attach_self>());
     rclcpp::shutdown();
     return 0;
 }
