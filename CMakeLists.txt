@@ -13,6 +13,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
+find_package(attach_shelf REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -31,9 +32,13 @@ ament_target_dependencies(pre_approach_node rclcpp geometry_msgs sensor_msgs nav
 add_executable(pre_approach_v2_node src/pre_approach_v2.cpp)
 ament_target_dependencies(pre_approach_v2_node rclcpp geometry_msgs sensor_msgs nav_msgs)
 
+add_executable(approach_test src/approach_service_server.cpp)
+ament_target_dependencies(approach_test rclcpp geometry_msgs sensor_msgs nav_msgs tf2_ros attach_shelf)
+
 install(TARGETS
    pre_approach_node
    pre_approach_v2_node
+   approach_test
    DESTINATION lib/${PROJECT_NAME}
  )
 
