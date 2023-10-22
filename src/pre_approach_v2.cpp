@@ -71,35 +71,38 @@ class Attach_self : public rclcpp::Node{
         rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_;
 
         void scan_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg){
-            RCLCPP_INFO(this->get_logger(), "obstacle: %f", obstacle);
+            // RCLCPP_INFO(this->get_logger(), "obstacle: %f", obstacle);
             if (!final_approach) {
-                RCLCPP_INFO(this->get_logger(), "final_approach: %s", fa.c_str() );
+                RCLCPP_INFO(this->get_logger(), "final_approach: false");
+            }else {
+                RCLCPP_INFO(this->get_logger(), "final_approach: true");
             }
-            RCLCPP_INFO(this->get_logger(), "degrees: %i", degrees );
+            // RCLCPP_INFO(this->get_logger(), "degrees: %i", degrees );
             if(msg->ranges[359] > obstacle && !turn ){
                 vel.linear.x = 0.5;
-                // pub_->publish(vel);
             }else if (msg->ranges[359] < obstacle){
                 vel.linear.x = 0;
                 turn = true;
-                // pub_->publish(vel);
             }
 
-            RCLCPP_INFO(this->get_logger(), "vel.linear: %f", vel.linear.x);
+            // RCLCPP_INFO(this->get_logger(), "vel.linear: %f", vel.linear.x);
 
         }
+        bool send = true;
 
         void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg){
             float cur_degree = euler_degree_transform(msg)/M_PI*180;
-            RCLCPP_INFO(this->get_logger(), "cur_degrees: %f", cur_degree );
-            if (std::fabs(degrees - cur_degree) > 0.1 && turn ) {
+            // RCLCPP_INFO(this->get_logger(), "cur_degrees: %f", cur_degree );
+
+            if (std::fabs(degrees - cur_degree) > 0.5 && turn ) {
                 vel.angular.z = (degrees - cur_degree)/std::fabs(degrees - cur_degree)*0.4;
-                RCLCPP_INFO(this->get_logger(), "vel.angular: %f", vel.angular.z);
+                // RCLCPP_INFO(this->get_logger(), "vel.angular: %f", vel.angular.z);
                 pub_->publish(vel);
-            }else if(std::fabs(degrees - cur_degree) < 0.1 && turn){
+            }else if(std::fabs(degrees - cur_degree) < 0.5 && turn && send){
                 auto request = std::make_shared<attach_shelf::srv::GoToLoading::Request>();
                 request->attach_to_shelf = final_approach;
                 client->async_send_request(request, std::bind(&Attach_self::service_response, this, std::placeholders::_1));
+                send = false;
             }else{
                 vel.angular.z = 0;
                 pub_->publish(vel);

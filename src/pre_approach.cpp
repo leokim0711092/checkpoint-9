@@ -51,11 +51,9 @@ class Attach_self : public rclcpp::Node{
             RCLCPP_INFO(this->get_logger(), "degrees: %i", degrees );
             if(msg->ranges[359] > obstacle && !turn ){
                 vel.linear.x = 0.5;
-                pub_->publish(vel);
             }else if (msg->ranges[359] < obstacle){
                 vel.linear.x = 0;
                 turn = true;
-                pub_->publish(vel);
             }
 
             RCLCPP_INFO(this->get_logger(), "vel.linear: %f", vel.linear.x);

@@ -1,5 +1,6 @@
 #include "attach_shelf/srv/detail/go_to_loading__struct.hpp"
 #include "rclcpp/node.hpp"
+#include "rclcpp/rate.hpp"
 #include "sensor_msgs/msg/detail/laser_scan__struct.hpp"
 #include <attach_shelf/srv/go_to_loading.hpp>
 #include <cmath>
@@ -38,7 +39,7 @@ class Approach_Server : public rclcpp::Node{
         tf2_ros::TransformListener tf_listener_;
 
         float x1, x2, y1, y2;
-        std::vector<int> accept_idx;
+        size_t accept_idx_size=0;
 
         void scan_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg){
             
@@ -58,8 +59,9 @@ class Approach_Server : public rclcpp::Node{
                   bool {
                     return a.first > b.first;
                   });
-
+            std::vector<int> accept_idx;
             for(const auto & pair : intensity_cont){
+                
 
                 bool close = false;
                 for(const int acp : accept_idx){
@@ -72,6 +74,8 @@ class Approach_Server : public rclcpp::Node{
                 if(!close) accept_idx.push_back(pair.second);
                 if(accept_idx.size() == 2) break;
             }
+            accept_idx_size = accept_idx.size();
+
             int idx_1 = accept_idx[0];
             int idx_2 = accept_idx[1];
             
@@ -93,20 +97,38 @@ class Approach_Server : public rclcpp::Node{
 
         void attach_callback(const std::shared_ptr<attach_shelf::srv::GoToLoading::Request> req, 
         const std::shared_ptr<attach_shelf::srv::GoToLoading::Response> res){
-            if(req->attach_to_shelf == true && accept_idx.size() == 2){
+
+            if(req->attach_to_shelf == true && accept_idx_size == 2){
                 // broadcaster_.sendTransform(broadcast_transform( (x1+x2)/2 , (y1+y2)/2 )); //this will disappear in short time
                 static_broadcaster_.sendTransform(broadcast_transform( (x1+x2)/2 , (y1+y2)/2 ));
                 move_towards_cart_frame();
                 RCLCPP_INFO(this->get_logger(), "Approach call");
 
+                RCLCPP_INFO(this->get_logger(), "Accept_idz = %zu",accept_idx_size);
+
                 res->complete = true;
-            }else if(req->attach_to_shelf == false && accept_idx.size() == 2){
+            }else if(req->attach_to_shelf == false && accept_idx_size == 2){
                 // broadcaster_.sendTransform(broadcast_transform( (x1+x2)/2 , (y1+y2)/2 )); //this will disappear in short time
                 static_broadcaster_.sendTransform(broadcast_transform( (x1+x2)/2 , (y1+y2)/2 ));
                 RCLCPP_INFO(this->get_logger(), "Approach not call but publish frame");
+               
+                RCLCPP_INFO(this->get_logger(), "Accept_idz = %zu",accept_idx_size);
+
                 res->complete = false;
             }else {
                 RCLCPP_INFO(this->get_logger(), "Approach did not meet two legs");
+
+                if (res->complete) {
+                    RCLCPP_INFO(this->get_logger(), "final_approach: true");
+                }else if (!res->complete) {
+                    RCLCPP_INFO(this->get_logger(), "final_approach: false");
+                } else{
+                    RCLCPP_INFO(this->get_logger(), "final_approach: none");
+                }
+                RCLCPP_INFO(this->get_logger(), "Accept_idz = %zu",accept_idx_size);
+
+                // RCLCPP_INFO(this->get_logger(), "Intensity  1:%f",intensity_cont[0].first);
+                // RCLCPP_INFO(this->get_logger(), "Intensity  2:%f",intensity_cont[1].first);
                 res->complete = false;
             }
         }
@@ -150,7 +172,11 @@ class Approach_Server : public rclcpp::Node{
             vel.linear.x = desired_distance; // move in x-direction of robot's frame
             RCLCPP_INFO(this->get_logger(), "vel.linear = %f",vel.linear.x);
 
-            // pub_->publish(vel);
+            pub_->publish(vel);
+            rclcpp::Rate l(1);
+            l.sleep();
+            vel.linear.x = 0;
+            pub_->publish(vel);
     }
 
 
