@@ -87,11 +87,6 @@ class Approach_Server : public rclcpp::Node{
 
             x2 = msg->ranges[idx_2]* cos(angle2);
             y2 = msg->ranges[idx_2]* sin(angle2);
-
-            // RCLCPP_INFO(this->get_logger(), "Intensity Index 1:%i",idx_1);
-            // RCLCPP_INFO(this->get_logger(), "Intensity Index 2:%i",idx_2);
-            // RCLCPP_INFO(this->get_logger(), "Intensity  1:%f",intensity_cont[0].first);
-            // RCLCPP_INFO(this->get_logger(), "Intensity  2:%f",intensity_cont[1].first);
         }
 
 
@@ -108,27 +103,13 @@ class Approach_Server : public rclcpp::Node{
 
                 res->complete = true;
             }else if(req->attach_to_shelf == false && accept_idx_size == 2){
+
                 // broadcaster_.sendTransform(broadcast_transform( (x1+x2)/2 , (y1+y2)/2 )); //this will disappear in short time
                 static_broadcaster_.sendTransform(broadcast_transform( (x1+x2)/2 , (y1+y2)/2 ));
                 RCLCPP_INFO(this->get_logger(), "Approach not call but publish frame");
-               
-                RCLCPP_INFO(this->get_logger(), "Accept_idz = %zu",accept_idx_size);
-
                 res->complete = false;
             }else {
                 RCLCPP_INFO(this->get_logger(), "Approach did not meet two legs");
-
-                if (res->complete) {
-                    RCLCPP_INFO(this->get_logger(), "final_approach: true");
-                }else if (!res->complete) {
-                    RCLCPP_INFO(this->get_logger(), "final_approach: false");
-                } else{
-                    RCLCPP_INFO(this->get_logger(), "final_approach: none");
-                }
-                RCLCPP_INFO(this->get_logger(), "Accept_idz = %zu",accept_idx_size);
-
-                // RCLCPP_INFO(this->get_logger(), "Intensity  1:%f",intensity_cont[0].first);
-                // RCLCPP_INFO(this->get_logger(), "Intensity  2:%f",intensity_cont[1].first);
                 res->complete = false;
             }
         }
@@ -169,11 +150,12 @@ class Approach_Server : public rclcpp::Node{
                 transform.transform.translation.y * transform.transform.translation.y);
 
             float desired_distance = distance_to_point;  // Approach by 30cm
-            vel.linear.x = desired_distance; // move in x-direction of robot's frame
+            vel.linear.x = desired_distance*0.5; // move in x-direction of robot's frame
             RCLCPP_INFO(this->get_logger(), "vel.linear = %f",vel.linear.x);
 
             pub_->publish(vel);
-            rclcpp::Rate l(1);
+
+            rclcpp::Rate l(3);
             l.sleep();
             vel.linear.x = 0;
             pub_->publish(vel);
