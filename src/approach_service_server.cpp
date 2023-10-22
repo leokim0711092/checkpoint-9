@@ -12,6 +12,7 @@
 #include <vector>
 #include <algorithm>
 #include <tf2_ros/transform_broadcaster.h>
+#include <tf2_ros/static_transform_broadcaster.h>
 
 class Approach_Server : public rclcpp::Node{
     
@@ -26,7 +27,9 @@ class Approach_Server : public rclcpp::Node{
     private:
         rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr sub_scan;
         rclcpp::Service<attach_shelf::srv::GoToLoading>::SharedPtr srv_;
-        tf2_ros::TransformBroadcaster broadcaster_{this};
+        // tf2_ros::TransformBroadcaster broadcaster_{this}; //this will disappear in short time
+        tf2_ros::StaticTransformBroadcaster static_broadcaster_{this};
+
         float x1, x2, y1, y2;
         std::vector<int> accept_idx;
 
@@ -76,19 +79,22 @@ class Approach_Server : public rclcpp::Node{
 
             // RCLCPP_INFO(this->get_logger(), "Intensity Index 1:%i",idx_1);
             // RCLCPP_INFO(this->get_logger(), "Intensity Index 2:%i",idx_2);
-
+            // RCLCPP_INFO(this->get_logger(), "Intensity  1:%f",intensity_cont[0].first);
+            // RCLCPP_INFO(this->get_logger(), "Intensity  2:%f",intensity_cont[1].first);
         }
 
 
         void attach_callback(const std::shared_ptr<attach_shelf::srv::GoToLoading::Request> req, 
         const std::shared_ptr<attach_shelf::srv::GoToLoading::Response> res){
             if(req->attach_to_shelf == true && accept_idx.size() == 2){
-                broadcaster_.sendTransform(broadcast_transform( (x1+x2)/2 , (y1+y2)/2 ));
+                // broadcaster_.sendTransform(broadcast_transform( (x1+x2)/2 , (y1+y2)/2 )); //this will disappear in short time
+                static_broadcaster_.sendTransform(broadcast_transform( (x1+x2)/2 , (y1+y2)/2 ));
                 RCLCPP_INFO(this->get_logger(), "Approach call");
 
                 res->complete = true;
             }else if(req->attach_to_shelf == false && accept_idx.size() == 2){
-                broadcaster_.sendTransform(broadcast_transform( (x1+x2)/2 , (y1+y2)/2 ));
+                // broadcaster_.sendTransform(broadcast_transform( (x1+x2)/2 , (y1+y2)/2 )); //this will disappear in short time
+                static_broadcaster_.sendTransform(broadcast_transform( (x1+x2)/2 , (y1+y2)/2 ));
                 res->complete = false;
             }else {
                 
