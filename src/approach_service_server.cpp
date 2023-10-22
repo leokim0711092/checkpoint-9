@@ -13,22 +13,29 @@
 #include <algorithm>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/static_transform_broadcaster.h>
+#include "tf2_ros/transform_listener.h"
+#include "tf2_ros/buffer.h"
 
 class Approach_Server : public rclcpp::Node{
     
     public:
-        Approach_Server(): Node("approach_server"){
+        Approach_Server(): Node("approach_server"), tf_buffer_(this->get_clock()), tf_listener_(tf_buffer_){
             
             sub_scan = this->create_subscription<sensor_msgs::msg::LaserScan>("/scan", 10 , 
             std::bind(&Approach_Server::scan_callback, this, std::placeholders::_1));
             srv_ = create_service<attach_shelf::srv::GoToLoading>("/approach_shelf",std::bind(&Approach_Server::attach_callback, this, std::placeholders::_1, std::placeholders::_2));
-            
+            pub_ = this->create_publisher<geometry_msgs::msg::Twist>("robot/cmd_vel", 10);
         }
     private:
+        
+        geometry_msgs::msg::Twist vel;
         rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr sub_scan;
         rclcpp::Service<attach_shelf::srv::GoToLoading>::SharedPtr srv_;
         // tf2_ros::TransformBroadcaster broadcaster_{this}; //this will disappear in short time
         tf2_ros::StaticTransformBroadcaster static_broadcaster_{this};
+        rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_;
+        tf2_ros::Buffer tf_buffer_;
+        tf2_ros::TransformListener tf_listener_;
 
         float x1, x2, y1, y2;
         std::vector<int> accept_idx;
@@ -89,15 +96,18 @@ class Approach_Server : public rclcpp::Node{
             if(req->attach_to_shelf == true && accept_idx.size() == 2){
                 // broadcaster_.sendTransform(broadcast_transform( (x1+x2)/2 , (y1+y2)/2 )); //this will disappear in short time
                 static_broadcaster_.sendTransform(broadcast_transform( (x1+x2)/2 , (y1+y2)/2 ));
+                move_towards_cart_frame();
                 RCLCPP_INFO(this->get_logger(), "Approach call");
 
                 res->complete = true;
             }else if(req->attach_to_shelf == false && accept_idx.size() == 2){
                 // broadcaster_.sendTransform(broadcast_transform( (x1+x2)/2 , (y1+y2)/2 )); //this will disappear in short time
                 static_broadcaster_.sendTransform(broadcast_transform( (x1+x2)/2 , (y1+y2)/2 ));
+                RCLCPP_INFO(this->get_logger(), "Approach not call but publish frame");
                 res->complete = false;
             }else {
-                
+                RCLCPP_INFO(this->get_logger(), "Approach did not meet two legs");
+                res->complete = false;
             }
         }
 
@@ -117,6 +127,32 @@ class Approach_Server : public rclcpp::Node{
 
                 return t;
         }
+
+         void move_towards_cart_frame(){
+            // Get the transform from base_link to cart_frame
+            geometry_msgs::msg::TransformStamped transform;
+            try
+            {
+                transform = tf_buffer_.lookupTransform("robot_front_laser_base_link", "cart_frame", rclcpp::Time(0));
+            }
+            catch (tf2::TransformException &ex)
+            {
+                RCLCPP_ERROR(this->get_logger(), "%s", ex.what());
+                return;
+            }
+
+            // Compute the direction and magnitude based on the transform's translation
+            float distance_to_point = std::sqrt(
+                transform.transform.translation.x * transform.transform.translation.x +
+                transform.transform.translation.y * transform.transform.translation.y);
+
+            float desired_distance = distance_to_point;  // Approach by 30cm
+            vel.linear.x = desired_distance; // move in x-direction of robot's frame
+            RCLCPP_INFO(this->get_logger(), "vel.linear = %f",vel.linear.x);
+
+            // pub_->publish(vel);
+    }
+
 
 };
 

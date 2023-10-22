@@ -1,3 +1,4 @@
+#include "attach_shelf/srv/detail/go_to_loading__struct.hpp"
 #include "geometry_msgs/msg/detail/twist__struct.hpp"
 #include "nav_msgs/msg/detail/odometry__struct.hpp"
 #include "rclcpp/executors.hpp"
@@ -15,6 +16,8 @@
 #include <geometry_msgs/msg/twist.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <string>
+#include <attach_shelf/srv/go_to_loading.hpp>
+
 
 class Attach_self : public rclcpp::Node{
 
@@ -35,7 +38,21 @@ class Attach_self : public rclcpp::Node{
 
             pub_ = this->create_publisher<geometry_msgs::msg::Twist>("robot/cmd_vel", 10);
 
+            client = this->create_client<attach_shelf::srv::GoToLoading>(
+            "/approach_shelf");      
+
+            while (!client->wait_for_service(std::chrono::seconds(1))) {
+                if (!rclcpp::ok()) {
+                    RCLCPP_ERROR(rclcpp::get_logger("rclcpp"),
+                    "Interrupted while waiting for the service. Exiting.");
+                    return;
+                }
+                    RCLCPP_INFO(rclcpp::get_logger("rclcpp"),
+                    "service not available, waiting again...");
+            }
         }
+
+    
 
     private:
         float obstacle;
@@ -45,7 +62,8 @@ class Attach_self : public rclcpp::Node{
         std::string ob;
         std::string de;
         std::string fa;
-
+        rclcpp::Client<attach_shelf::srv::GoToLoading>::SharedPtr client;
+        
         geometry_msgs::msg::Twist vel;
         rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr sub_scan;
         rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_odom;
@@ -77,10 +95,14 @@ class Attach_self : public rclcpp::Node{
             if (std::fabs(degrees - cur_degree) > 0.1 && turn ) {
                 vel.angular.z = (degrees - cur_degree)/std::fabs(degrees - cur_degree)*0.4;
                 RCLCPP_INFO(this->get_logger(), "vel.angular: %f", vel.angular.z);
-                // pub_->publish(vel);
+                pub_->publish(vel);
+            }else if(std::fabs(degrees - cur_degree) < 0.1 && turn){
+                auto request = std::make_shared<attach_shelf::srv::GoToLoading::Request>();
+                request->attach_to_shelf = final_approach;
+                client->async_send_request(request, std::bind(&Attach_self::service_response, this, std::placeholders::_1));
             }else{
                 vel.angular.z = 0;
-                // pub_->publish(vel);
+                pub_->publish(vel);
             }
         }
 
@@ -88,6 +110,19 @@ class Attach_self : public rclcpp::Node{
             obstacle = std::stof(ob);
             degrees = std::stoi(de);
             final_approach = fa == "false" ? false : true;
+        }
+
+        void service_response(rclcpp::Client<attach_shelf::srv::GoToLoading>::SharedFuture fut){
+            auto status = fut.wait_for(std::chrono::seconds(1));
+            if(status == std::future_status::ready){
+                auto response = fut.get();
+                RCLCPP_INFO(this->get_logger(), "Service was called");
+                std::string fb = response->complete ? "true" : "false";
+                RCLCPP_INFO(this->get_logger(), "Recevied final_approach: %s", fb.c_str());
+            }
+            else {
+                RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Failed to call service");
+            }
         }
 
         float euler_degree_transform(const nav_msgs::msg::Odometry::SharedPtr msg){

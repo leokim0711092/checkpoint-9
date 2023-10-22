@@ -30,7 +30,7 @@ add_executable(pre_approach_node src/pre_approach.cpp)
 ament_target_dependencies(pre_approach_node rclcpp geometry_msgs sensor_msgs nav_msgs)
 
 add_executable(pre_approach_v2_node src/pre_approach_v2.cpp)
-ament_target_dependencies(pre_approach_v2_node rclcpp geometry_msgs sensor_msgs nav_msgs)
+ament_target_dependencies(pre_approach_v2_node rclcpp geometry_msgs sensor_msgs nav_msgs attach_shelf)
 
 add_executable(approach_test src/approach_service_server.cpp)
 ament_target_dependencies(approach_test rclcpp geometry_msgs sensor_msgs nav_msgs tf2_ros attach_shelf)
