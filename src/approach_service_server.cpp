@@ -14,8 +14,10 @@
 #include <algorithm>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/static_transform_broadcaster.h>
+#include "std_msgs/msg/detail/empty__struct.hpp"
 #include "tf2_ros/transform_listener.h"
 #include "tf2_ros/buffer.h"
+#include "std_msgs/msg/empty.hpp"
 
 class Approach_Server : public rclcpp::Node{
     
@@ -26,15 +28,21 @@ class Approach_Server : public rclcpp::Node{
             std::bind(&Approach_Server::scan_callback, this, std::placeholders::_1));
             srv_ = create_service<attach_shelf::srv::GoToLoading>("/approach_shelf",std::bind(&Approach_Server::attach_callback, this, std::placeholders::_1, std::placeholders::_2));
             pub_ = this->create_publisher<geometry_msgs::msg::Twist>("robot/cmd_vel", 10);
+            pub_elevator = this->create_publisher<std_msgs::msg::Empty>("/elevator_up", 10);
+
         }
     private:
         
         geometry_msgs::msg::Twist vel;
+        std_msgs::msg::Empty ele;
+
         rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr sub_scan;
         rclcpp::Service<attach_shelf::srv::GoToLoading>::SharedPtr srv_;
         // tf2_ros::TransformBroadcaster broadcaster_{this}; //this will disappear in short time
         tf2_ros::StaticTransformBroadcaster static_broadcaster_{this};
         rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_;
+        rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr pub_elevator;
+
         tf2_ros::Buffer tf_buffer_;
         tf2_ros::TransformListener tf_listener_;
 
@@ -155,10 +163,11 @@ class Approach_Server : public rclcpp::Node{
 
             pub_->publish(vel);
 
-            rclcpp::Rate l(3);
+            rclcpp::Rate l(0.25);
             l.sleep();
             vel.linear.x = 0;
             pub_->publish(vel);
+            pub_elevator->publish(ele);
     }
 
 
